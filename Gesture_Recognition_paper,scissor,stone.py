@@ -1,3 +1,7 @@
+#We recognize gestures by measuring the distances from the wrist to the fingertips and to the finger PIPs, 
+#allowing gesture detection even when the hand is facing backward.
+#以 0點(手腕) 與 指尖 和 Finger Pip 的距離來辨識手勢，在手掌不是正面的情況下也能辨識出手勢。
+
 import cv2
 import math
 import mediapipe as mp
