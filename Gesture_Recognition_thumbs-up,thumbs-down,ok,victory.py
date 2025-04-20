@@ -1,6 +1,5 @@
-# We recognize gestures by measuring the distances from the wrist to the fingertips and to the finger PIPs, 
-# allowing gesture detection even when the hand is facing backward.
-# 以 0點(手腕) 與 指尖 和 Finger Pip 的距離來辨識手勢，在手掌不是正面的情況下也能辨識出手勢。
+# Gesture recognition and display on the screen (Thumbs-up, Thumbs-down, OK, Victory)
+# 辨識手勢並顯示在螢幕上
 
 import cv2
 import math
@@ -18,6 +17,7 @@ def normalized_to_pixel_coordinates(normalized_x, normalized_y, image_width, ima
     y_px = min(int(normalized_y * image_height), image_height - 1)
     return (x_px, y_px)
 
+## Use distance from top of the finger to wrist, so that it won't missed when rotating
 def distance(p1, p2):
     return math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
     
@@ -34,8 +34,9 @@ with mp_hands.Hands(
     image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
     image.flags.writeable = False
     results = hands.process(image)
+    thumb_flag = 0
 
-    ## Draw the hand annotations on the image.
+    ## Get the hand landmarks and draw.
     image.flags.writeable = True
     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     if results.multi_hand_landmarks:
@@ -48,35 +49,49 @@ with mp_hands.Hands(
                         normalizedLandmark.y, 
                         frameWidth, 
                         frameHeight)
+                    cv2.circle(image, pixelCoordinatesLandmark, 2, (255, 0, 0), -1)
                     if pixelCoordinatesLandmark:
                         pixelCoordinatesLandmarks.append(pixelCoordinatesLandmark)
-                        
+
+        ## Compare whether distance of tip is further than pip's distance
         wrist = pixelCoordinatesLandmarks[0]
         tip_ids = [4, 8, 12, 16, 20]
-        pip_ids = [2, 6, 10, 14, 18]
+        pip_ids = [1, 6, 10, 14, 18]
         distances_tip = [distance(wrist, pixelCoordinatesLandmarks[i]) for i in tip_ids]
         distances_pip = [distance(wrist, pixelCoordinatesLandmarks[i]) for i in pip_ids]
         far = []
-        
-        # thumb
-        if distances_tip[0] < distances_pip[0]:
-            far.append(0)
-        else:
+
+        ## Thumb, if tip is further than cmc from wrist = 1
+        if distances_tip[0] > distances_pip[0]:
             far.append(1)
+            if distance(wrist, pixelCoordinatesLandmarks[4]) > 100 and distance(wrist, pixelCoordinatesLandmarks[4])\
+            - distance(wrist, pixelCoordinatesLandmarks[6]) > 12:
+                thumb_flag = 1
+        else:
+            far.append(0)
             
-        # other four fingers
+        #print(0, ' distances_tip[0] = ',  distances_tip[0], ' distances_pip[0] = ',  distances_pip[0])
+        
+        ## Another four fingers, if tip is further than pip from wrist = 1
         for id in range(1, 5):
-            if distances_tip[id] < distances_pip[id]:
-                far.append(0)
-            else:
+            if distances_tip[id] > distances_pip[id]:
                 far.append(1)
-            
-        if far == [0, 0, 0, 0, 0] or far == [1, 0, 0, 0, 0]:
-            cv2.putText(image, 'Rock', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 3, cv2.LINE_AA)
-        elif far == [1, 1, 1, 1, 1]:
-            cv2.putText(image, 'Paper', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 3, cv2.LINE_AA)
-        elif far == [0, 1, 1, 0, 0] or [1, 1, 1, 0, 0]:
-             cv2.putText(image, 'Scissor', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 3, cv2.LINE_AA)
+                #print(id, ' distances_tip[id] = ',  distances_tip[id], ' distances_pip[id] = ',  distances_pip[id])
+            else:
+                far.append(0)
+                #print(id, ' distances_tip[id] = ',  distances_tip[id], ' distances_pip[id] = ',  distances_pip[id])
+
+        ## Find out the gesture after comparing pip's distance and tip's distance
+        if far == [1, 0, 0, 0, 0] and thumb_flag == 1:
+            ## Compare wrist's y-axis with top of the thumb's y-axis
+            if(wrist[1] >  pixelCoordinatesLandmarks[4][1]):
+                cv2.putText(image, 'Thumbs-up', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 3, cv2.LINE_AA)
+            else:
+                cv2.putText(image, 'Thumbs-up(down)', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 3, cv2.LINE_AA)             
+        elif far == [1, 0, 1, 1, 1]:
+            cv2.putText(image, 'OK', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 3, cv2.LINE_AA)
+        elif far == [1, 1, 1, 0, 0]:
+            cv2.putText(image, 'Victory', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 3, cv2.LINE_AA)
         else:
             cv2.putText(image, 'Unknowned', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 3, cv2.LINE_AA)
     
